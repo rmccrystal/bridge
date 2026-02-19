@@ -54,7 +54,6 @@ pub fn run_remote_command(
     // Keepalive settings ensure SSH detects dead connections quickly (~15s)
     // rather than waiting for TCP timeout (can be minutes).
     let mut child = Command::new("ssh")
-        .arg("-t")
         .args(["-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3"])
         .arg(hostname)
         .arg(&full_cmd)

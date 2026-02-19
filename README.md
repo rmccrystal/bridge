@@ -1,11 +1,13 @@
 # Bridge
 
-A CLI tool for remote development over SSH. Sync code, run commands, and transfer files between your local machine and remote hosts.
+One config file replaces your ad-hoc SSH scripts for syncing, building, and testing on remote hosts.
 
-- **Sync projects** to remote machines using tar or rsync
-- **Run commands** remotely with automatic shell wrapping (bash, PowerShell, cmd)
-- **Transfer files** with simple upload/download commands
-- **Built-in locking and auto-reconnect** for resilient, conflict-free remote workflows
+![bridge demo](demo.gif)
+
+- **One command to sync + run** — `bridge run --sync "cargo build"` replaces manual rsync/ssh chains
+- **Multi-shell support** — bash, PowerShell, and cmd with automatic command wrapping
+- **Environment variable substitution** — loads `.env` files locally, substitutes into remote commands
+- **Locking and auto-reconnect** — resilient, conflict-free workflows across multiple sessions
 
 ## Installation
 
@@ -19,10 +21,14 @@ A CLI tool for remote development over SSH. Sync code, run commands, and transfe
 ### From source
 
 ```bash
+# From a local clone
 cargo install --path .
+
+# Or directly from GitHub
+cargo install --git https://github.com/rmccrystal/bridge
 ```
 
-Or using `just` (also installs the Claude Code / Codex skill):
+Or using `just` (also installs an AI coding assistant integration):
 
 ```bash
 just install
@@ -33,6 +39,9 @@ just install
 1. Initialize a config file in your project:
 
 ```bash
+# Verify SSH access first
+ssh dev-server "echo connected"
+
 cd myproject
 bridge init
 ```
@@ -81,7 +90,7 @@ Options:
 
 ### sync
 
-Sync the current project directory to the remote machine.
+Sync the current project directory to the remote host.
 
 ```bash
 bridge sync                     # Sync to default host
@@ -90,6 +99,9 @@ bridge sync --dry-run           # Preview what would happen
 bridge sync --no-auto-exclude   # Include .DS_Store and ._* files
 bridge sync --delete-excluded   # Delete excluded files on remote (rsync only)
 ```
+
+<details>
+<summary>Full options</summary>
 
 ```
 Usage: bridge sync [OPTIONS]
@@ -102,9 +114,11 @@ Options:
       --dry-run          Preview without executing
 ```
 
+</details>
+
 ### run
 
-Execute a command on the remote machine.
+Execute a command on the remote host.
 
 ```bash
 bridge run "cargo test"                          # Run on default host
@@ -113,6 +127,9 @@ bridge run --host gpu "python train.py"          # Target a specific host
 bridge run --lock "make install"                 # Acquire exclusive lock
 bridge run --reconnect-command "dump.sh" "start" # Auto-reconnect and run command on disconnect
 ```
+
+<details>
+<summary>Full options</summary>
 
 ```
 Usage: bridge run [OPTIONS] <COMMAND>
@@ -131,14 +148,19 @@ Options:
       --dry-run                                  Preview without executing
 ```
 
+</details>
+
 ### upload
 
-Upload a single file to the remote machine's project directory.
+Upload a single file to the remote host's project directory.
 
 ```bash
 bridge upload data.csv                    # Upload to remote project dir
 bridge upload data.csv --dest input.csv   # Upload with a different name
 ```
+
+<details>
+<summary>Full options</summary>
 
 ```
 Usage: bridge upload [OPTIONS] <FILE>
@@ -153,15 +175,20 @@ Options:
       --dry-run      Preview without executing
 ```
 
+</details>
+
 ### download
 
-Download a file from the remote machine.
+Download a file from the remote host.
 
 ```bash
 bridge download output.log                    # Download to current dir
 bridge download dist/ --dest ./build/         # Download a directory
 bridge download /tmp/debug.log                # Absolute remote path
 ```
+
+<details>
+<summary>Full options</summary>
 
 ```
 Usage: bridge download [OPTIONS] <FILE>
@@ -175,6 +202,8 @@ Options:
   -v, --verbose      Detailed output
       --dry-run      Preview without executing
 ```
+
+</details>
 
 ### init
 
@@ -351,7 +380,7 @@ bridge run --lock --lock-timeout 60 "make test"   # Custom timeout
 
 ## Auto-Reconnect
 
-If an SSH connection drops unexpectedly (e.g., remote machine reboots), Bridge can wait for the host to come back and run a recovery command.
+If an SSH connection drops unexpectedly (e.g., remote host reboots), Bridge can wait for the host to come back and run a recovery command.
 
 ### Configuration
 
@@ -376,19 +405,6 @@ bridge run --reconnect-timeout 120 --reconnect-command "dump.sh" "start-service"
 - If the timeout expires, Bridge exits with code 255
 
 ## Example Workflows
-
-### Linux remote development
-
-```bash
-cd myproject
-bridge init
-# Edit bridge.toml with host details
-
-# Development cycle
-bridge run --sync "cargo build"
-bridge run "cargo test"
-bridge download target/debug/myapp
-```
 
 ### Windows remote
 
@@ -423,7 +439,7 @@ bridge run --sync "python train.py"   # Locked, reconnect-aware, env activated
 
 ## Requirements
 
-| | Requirements |
+| Platform | Requirements |
 |---|---|
 | **Local machine** | macOS or Linux, `ssh`, `scp`, `tar`. Optional: `rsync`. |
 | **Remote (Linux)** | SSH server, `tar`. Optional: `rsync`. |
