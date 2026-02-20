@@ -17,6 +17,9 @@ bridge sync --dry-run              # Preview sync
 bridge sync --delete-excluded      # Also delete excluded files from remote (rsync only)
 bridge run "<command>"             # Run command on remote
 bridge run --sync "<command>"      # Sync first, then run
+bridge run -i "<command>"          # Run interactive command (allocates PTY)
+bridge ssh                         # Open interactive SSH session
+bridge ssh --sync                  # Sync first, then open session
 bridge run --reconnect-command "cmd" "<command>"  # Run cmd after SSH reconnects
 bridge run --reconnect-timeout 120 --reconnect-command "cmd" "<command>"
 bridge run --lock "<command>"              # Acquire exclusive lock (default name)

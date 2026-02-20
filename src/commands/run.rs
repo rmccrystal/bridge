@@ -13,6 +13,7 @@ pub fn run(
     host: Option<&str>,
     command: &str,
     do_sync: bool,
+    interactive: bool,
     dry_run: bool,
     verbose: bool,
     reconnect_command_override: Option<&str>,
@@ -87,6 +88,7 @@ pub fn run(
         host.wrapper.as_deref(),
         host.strict_env,
         &env_vars,
+        interactive,
         verbose,
     )?;
 
@@ -120,6 +122,7 @@ pub fn run(
                         host.wrapper.as_deref(),
                         host.strict_env,
                         &env_vars,
+                        false,
                         verbose,
                     )?;
 

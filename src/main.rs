@@ -51,6 +51,10 @@ enum Commands {
         #[arg(short, long)]
         sync: bool,
 
+        /// Allocate PTY for interactive commands (e.g. htop, python REPL)
+        #[arg(short, long)]
+        interactive: bool,
+
         /// Command to run after reconnecting from unexpected SSH disconnect (overrides config)
         #[arg(long)]
         reconnect_command: Option<String>,
@@ -91,6 +95,13 @@ enum Commands {
     /// Create bridge.toml in current directory
     Init,
 
+    /// Open interactive SSH session on remote
+    Ssh {
+        /// Sync before connecting
+        #[arg(short, long)]
+        sync: bool,
+    },
+
     /// List configured hosts
     Hosts,
 }
@@ -102,8 +113,8 @@ fn main() -> ExitCode {
         Commands::Sync { no_auto_exclude, delete_excluded } => {
             commands::sync::run(cli.host.as_deref(), no_auto_exclude, delete_excluded, cli.dry_run, cli.verbose)
         }
-        Commands::Run { command, sync, reconnect_command, reconnect_timeout, lock, lock_timeout } => {
-            match commands::run::run(cli.host.as_deref(), &command, sync, cli.dry_run, cli.verbose, reconnect_command.as_deref(), reconnect_timeout, lock, lock_timeout) {
+        Commands::Run { command, sync, interactive, reconnect_command, reconnect_timeout, lock, lock_timeout } => {
+            match commands::run::run(cli.host.as_deref(), &command, sync, interactive, cli.dry_run, cli.verbose, reconnect_command.as_deref(), reconnect_timeout, lock, lock_timeout) {
                 Ok(exit_code) => {
                     return ExitCode::from(exit_code.min(255) as u8);
                 }
@@ -124,6 +135,14 @@ fn main() -> ExitCode {
             cli.dry_run,
             cli.verbose,
         ),
+        Commands::Ssh { sync } => {
+            match commands::ssh::run(cli.host.as_deref(), sync, cli.verbose) {
+                Ok(exit_code) => {
+                    return ExitCode::from(exit_code.min(255) as u8);
+                }
+                Err(e) => Err(e),
+            }
+        }
         Commands::Init => commands::init::run(cli.verbose),
         Commands::Hosts => commands::hosts::run(cli.verbose),
     };

@@ -22,6 +22,7 @@ pub fn run_remote_command(
     wrapper: Option<&str>,
     strict_env: bool,
     env_vars: &HashMap<String, String>,
+    interactive: bool,
     verbose: bool,
 ) -> Result<i32> {
     // Step 1: Substitute environment variables in the user command
@@ -53,13 +54,16 @@ pub fn run_remote_command(
     // Step 5: Execute
     // Keepalive settings ensure SSH detects dead connections quickly (~15s)
     // rather than waiting for TCP timeout (can be minutes).
-    let mut child = Command::new("ssh")
-        .args(["-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3"])
+    let mut cmd = Command::new("ssh");
+    if interactive {
+        cmd.arg("-t");
+    }
+    cmd.args(["-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3"])
         .arg(hostname)
         .arg(&full_cmd)
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
+        .stderr(Stdio::inherit());
+    let mut child = cmd.spawn()
         .context("Failed to spawn SSH process")?;
 
     let status = child.wait().context("Failed to wait for SSH process")?;

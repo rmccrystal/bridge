@@ -74,6 +74,7 @@ Usage: bridge [OPTIONS] <COMMAND>
 Commands:
   sync      Sync current directory to remote
   run       Run command on remote
+  ssh       Open interactive SSH session on remote
   upload    Upload single file to remote
   download  Download file from remote
   init      Create bridge.toml in current directory
@@ -124,6 +125,8 @@ Execute a command on the remote host.
 bridge run "cargo test"                          # Run on default host
 bridge run --sync "make build"                   # Sync first, then run
 bridge run --host gpu "python train.py"          # Target a specific host
+bridge run -i "htop"                             # Interactive command with PTY
+bridge run -i "python3"                          # Interactive Python REPL
 bridge run --lock "make install"                 # Acquire exclusive lock
 bridge run --reconnect-command "dump.sh" "start" # Auto-reconnect and run command on disconnect
 ```
@@ -140,12 +143,37 @@ Arguments:
 Options:
       --host <HOST>                              Override default host
   -s, --sync                                     Sync before running
+  -i, --interactive                              Allocate PTY for interactive commands (e.g. htop, python REPL)
       --reconnect-command <RECONNECT_COMMAND>     Command to run after reconnecting from unexpected SSH disconnect (overrides config)
       --reconnect-timeout <RECONNECT_TIMEOUT>     Seconds to wait for reconnection (overrides config, default: 90)
       --lock [<LOCK>]                             Acquire exclusive lock before running (optional lock name)
       --lock-timeout <LOCK_TIMEOUT>               Seconds to wait for lock (default: 600)
   -v, --verbose                                  Detailed output
       --dry-run                                  Preview without executing
+```
+
+</details>
+
+### ssh
+
+Open an interactive SSH session on the remote host, cd'd to the project directory with your configured wrapper applied.
+
+```bash
+bridge ssh                     # Open shell on default host
+bridge ssh --sync              # Sync first, then open shell
+bridge ssh --host gpu          # Open shell on a specific host
+```
+
+<details>
+<summary>Full options</summary>
+
+```
+Usage: bridge ssh [OPTIONS]
+
+Options:
+      --host <HOST>  Override default host
+  -s, --sync         Sync before connecting
+  -v, --verbose      Detailed output
 ```
 
 </details>
