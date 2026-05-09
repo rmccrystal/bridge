@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 
-use crate::config::Config;
+use crate::config::{self, Config};
 use crate::ssh;
 
 pub fn run(
@@ -11,8 +11,10 @@ pub fn run(
     dry_run: bool,
     verbose: bool,
 ) -> Result<()> {
-    let (config, _config_path) = Config::find_and_load()?;
+    let (config, config_path) = Config::find_and_load()?;
     let (host_name, host_config) = config.get_host(host)?;
+    let project_root = Config::project_root(&config_path);
+    let remote_root = config::effective_remote_path(host_config, &project_root);
 
     // Resolve local file path
     let local_path = if Path::new(file).is_absolute() {
@@ -33,7 +35,7 @@ pub fn run(
             .unwrap_or(file)
     });
 
-    let remote_path = format!("{}/{}", host_config.path, remote_filename);
+    let remote_path = format!("{}/{}", remote_root, remote_filename);
 
     if verbose {
         eprintln!("Uploading to host: {} ({})", host_name, host_config.hostname);
@@ -43,7 +45,7 @@ pub fn run(
 
     // Ensure remote directory exists (skip in dry-run)
     if !dry_run {
-        ssh::ensure_remote_dir(&host_config.hostname, &host_config.path, &host_config.shell, verbose)?;
+        ssh::ensure_remote_dir(&host_config.hostname, &remote_root, &host_config.shell, verbose)?;
     }
 
     ssh::upload_to_remote(

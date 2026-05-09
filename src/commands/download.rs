@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::path::Path;
 
-use crate::config::Config;
+use crate::config::{self, Config};
 use crate::ssh;
 
 pub fn run(
@@ -11,14 +11,16 @@ pub fn run(
     dry_run: bool,
     verbose: bool,
 ) -> Result<()> {
-    let (config, _config_path) = Config::find_and_load()?;
+    let (config, config_path) = Config::find_and_load()?;
     let (host_name, host_config) = config.get_host(host)?;
+    let project_root = Config::project_root(&config_path);
+    let remote_root = config::effective_remote_path(host_config, &project_root);
 
     // Build remote path
     let remote_path = if file.starts_with('/') || file.starts_with('~') || file.contains(':') {
         file.to_string()
     } else {
-        format!("{}/{}", host_config.path, file)
+        format!("{}/{}", remote_root, file)
     };
 
     // Determine local destination

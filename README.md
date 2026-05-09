@@ -262,6 +262,7 @@ hostname = "dev-server"                        # SSH alias or IP address
 path = "/home/user/project"                    # Remote working directory
 shell = "bash"                                 # bash (default), powershell, or cmd
 sync_method = "rsync"                          # tar (default) or rsync (incremental)
+worktree_rename = true                         # Linked git worktrees use path-worktree_name
 wrapper = "source ~/.profile && {}"            # Wrap all commands (see Command Wrappers)
 strict_env = true                              # Fail on missing ${VAR} (default: true)
 env_files = [".env.prod"]                      # Additional env files to load after .env
@@ -289,6 +290,7 @@ exclude = [".git", "target", "node_modules", "__pycache__"]
 | `hosts.<name>.path` | Yes | — | Remote working directory |
 | `hosts.<name>.shell` | No | `bash` | `bash`, `powershell`, or `cmd` |
 | `hosts.<name>.sync_method` | No | `tar` | `tar` or `rsync` |
+| `hosts.<name>.worktree_rename` | No | `true` | Linked Git worktrees use `path-<worktree-directory-name>` |
 | `hosts.<name>.wrapper` | No | — | Command wrapper template with `{}` placeholder |
 | `hosts.<name>.strict_env` | No | `true` | Fail when `${VAR}` references cannot be resolved |
 | `hosts.<name>.env_files` | No | `[]` | Additional env files to load after `.env` |
@@ -297,6 +299,18 @@ exclude = [".git", "target", "node_modules", "__pycache__"]
 | `hosts.<name>.lock` | No | `false` | `true` (default lock name) or `"name"` (named lock) |
 | `hosts.<name>.lock_timeout` | No | `600` | Seconds to wait for lock acquisition |
 | `sync.exclude` | No | `[".git", "target", "node_modules", "__pycache__"]` | Patterns to exclude from sync |
+
+### Git Worktrees
+
+By default, linked Git worktrees deploy to a remote path suffixed with the local worktree directory name. The primary checkout keeps the configured `path`.
+
+```toml
+[hosts.dev-server]
+path = "/home/user/project"
+worktree_rename = true
+```
+
+If the local checkout is a linked worktree at `~/code/project-codex-1`, Bridge uses `/home/user/project-project-codex-1` for `sync`, `run`, `ssh`, `upload`, and relative `download` paths. Set `worktree_rename = false` to always use the configured path exactly.
 
 ### Sync Methods
 

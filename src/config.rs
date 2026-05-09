@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 const CONFIG_FILENAME: &str = "bridge.toml";
 
@@ -25,6 +26,9 @@ pub struct Host {
     /// Sync method: "tar" (default) or "rsync" (incremental, deletes removed files)
     #[serde(default)]
     pub sync_method: SyncMethod,
+    /// If true, linked git worktrees use path-worktree_name as the remote path. Default: true.
+    #[serde(default = "default_true")]
+    pub worktree_rename: bool,
     /// Optional command wrapper template. Use `{}` as placeholder for the command.
     /// Supports ${VAR} syntax for local environment variable substitution.
     pub wrapper: Option<String>,
@@ -172,6 +176,65 @@ pub fn auto_excludes() -> Vec<String> {
     ]
 }
 
+/// Return the remote path Bridge should use for this checkout.
+pub fn effective_remote_path(host: &Host, project_root: &Path) -> String {
+    if !host.worktree_rename || !is_linked_worktree(project_root) {
+        return host.path.clone();
+    }
+
+    let Some(worktree_name) = worktree_name(project_root) else {
+        return host.path.clone();
+    };
+
+    remote_path_with_worktree_suffix(&host.path, &worktree_name)
+}
+
+fn is_linked_worktree(project_root: &Path) -> bool {
+    let Some(git_dir) = git_output(project_root, &["rev-parse", "--git-dir"]) else {
+        return false;
+    };
+    let Some(common_dir) = git_output(project_root, &["rev-parse", "--git-common-dir"]) else {
+        return false;
+    };
+
+    git_dir != common_dir
+}
+
+fn worktree_name(project_root: &Path) -> Option<String> {
+    let worktree_root = git_output(project_root, &["rev-parse", "--show-toplevel"])?;
+    Path::new(&worktree_root)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.to_string())
+}
+
+fn remote_path_with_worktree_suffix(remote_path: &str, worktree_name: &str) -> String {
+    let base = remote_path.trim_end_matches(['/', '\\']);
+    let base = if base.is_empty() { remote_path } else { base };
+    format!("{}-{}", base, worktree_name)
+}
+
+fn git_output(project_root: &Path, args: &[&str]) -> Option<String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(args)
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8(output.stdout).ok()?;
+    let value = stdout.trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {
@@ -260,6 +323,7 @@ hostname = "dev-server"        # SSH alias (from ~/.ssh/config) or IP
 path = "/home/user/projects/myproject"
 # shell = "bash"               # bash (default), powershell, or cmd
 # sync_method = "rsync"        # tar (default) or rsync (incremental, deletes removed files)
+# worktree_rename = true       # Linked git worktrees use path-worktree_name (default: true)
 # wrapper = "source ~/.profile && {}"  # Optional: wrap all commands
 # strict_env = true            # Fail on missing ${VAR} references (default: true)
 # env_files = [".env.prod"]    # Additional env files to load after .env
@@ -286,4 +350,147 @@ path = "/home/user/projects/myproject"
 exclude = [".git", "target", "node_modules", "__pycache__"]
 "#
     .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn worktree_rename_defaults_to_true() {
+        let config: Config = toml::from_str(
+            r#"
+default_host = "dev"
+
+[hosts.dev]
+hostname = "dev"
+path = "/home/user/project"
+"#,
+        )
+        .unwrap();
+
+        let host = config.hosts.get("dev").unwrap();
+        assert!(host.worktree_rename);
+    }
+
+    #[test]
+    fn worktree_rename_can_be_disabled() {
+        let config: Config = toml::from_str(
+            r#"
+default_host = "dev"
+
+[hosts.dev]
+hostname = "dev"
+path = "/home/user/project"
+worktree_rename = false
+"#,
+        )
+        .unwrap();
+
+        let host = config.hosts.get("dev").unwrap();
+        assert!(!host.worktree_rename);
+    }
+
+    #[test]
+    fn remote_path_suffix_handles_unix_windows_and_trailing_separators() {
+        assert_eq!(
+            remote_path_with_worktree_suffix("/home/user/project", "project-fix"),
+            "/home/user/project-project-fix"
+        );
+        assert_eq!(
+            remote_path_with_worktree_suffix("/home/user/project/", "project-fix"),
+            "/home/user/project-project-fix"
+        );
+        assert_eq!(
+            remote_path_with_worktree_suffix("C:/Users/name/project", "project-fix"),
+            "C:/Users/name/project-project-fix"
+        );
+        assert_eq!(
+            remote_path_with_worktree_suffix(r"C:\Users\name\project\\", "project-fix"),
+            r"C:\Users\name\project-project-fix"
+        );
+    }
+
+    #[test]
+    fn primary_worktree_uses_configured_path() {
+        let dir = TempDir::new().unwrap();
+        git(dir.path(), &["init"]);
+
+        let host = test_host(true);
+        assert_eq!(effective_remote_path(&host, dir.path()), "/remote/project");
+    }
+
+    #[test]
+    fn linked_worktree_uses_worktree_directory_suffix() {
+        let dir = TempDir::new().unwrap();
+        let main = dir.path().join("repo");
+        let linked = dir.path().join("repo-codex-1");
+
+        fs::create_dir(&main).unwrap();
+        git(&main, &["init"]);
+        git(&main, &["config", "user.email", "bridge@example.com"]);
+        git(&main, &["config", "user.name", "Bridge Tests"]);
+        git(&main, &["commit", "--allow-empty", "-m", "init"]);
+        git(&main, &["worktree", "add", linked.to_str().unwrap()]);
+
+        let host = test_host(true);
+        assert_eq!(
+            effective_remote_path(&host, &linked),
+            "/remote/project-repo-codex-1"
+        );
+    }
+
+    #[test]
+    fn disabled_worktree_rename_uses_configured_path_in_linked_worktree() {
+        let dir = TempDir::new().unwrap();
+        let main = dir.path().join("repo");
+        let linked = dir.path().join("repo-codex-2");
+
+        fs::create_dir(&main).unwrap();
+        git(&main, &["init"]);
+        git(&main, &["config", "user.email", "bridge@example.com"]);
+        git(&main, &["config", "user.name", "Bridge Tests"]);
+        git(&main, &["commit", "--allow-empty", "-m", "init"]);
+        git(&main, &["worktree", "add", linked.to_str().unwrap()]);
+
+        let host = test_host(false);
+        assert_eq!(effective_remote_path(&host, &linked), "/remote/project");
+    }
+
+    fn test_host(worktree_rename: bool) -> Host {
+        Host {
+            hostname: "dev".to_string(),
+            path: "/remote/project".to_string(),
+            shell: Shell::Bash,
+            sync_method: SyncMethod::Tar,
+            worktree_rename,
+            wrapper: None,
+            strict_env: true,
+            env_files: Vec::new(),
+            reconnect_command: None,
+            reconnect_timeout: default_reconnect_timeout(),
+            lock: LockSetting::Off,
+            lock_timeout: default_lock_timeout(),
+        }
+    }
+
+    fn git(cwd: &Path, args: &[&str]) {
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+
+        assert!(
+            output.status.success(),
+            "git -C {} {} failed\nstdout:\n{}\nstderr:\n{}",
+            cwd.display(),
+            args.join(" "),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }

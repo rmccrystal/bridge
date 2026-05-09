@@ -3,7 +3,7 @@ use std::thread;
 
 use anyhow::Result;
 
-use crate::config::{Config, LockSetting};
+use crate::config::{self, Config, LockSetting};
 use crate::env_loader;
 use crate::lock;
 use crate::ssh;
@@ -32,6 +32,7 @@ pub fn run(
     // Load environment variables from .env files
     let project_root = Config::project_root(&config_path);
     let env_vars = env_loader::load_env_files(&project_root, &host.env_files)?;
+    let remote_path = config::effective_remote_path(host, &project_root);
 
     // Resolve reconnect settings: CLI flags override config
     let reconnect_command = reconnect_command_override
@@ -51,7 +52,7 @@ pub fn run(
 
     if verbose {
         eprintln!("Running on host: {} ({})", host_name, host.hostname);
-        eprintln!("Remote path: {}", host.path);
+        eprintln!("Remote path: {}", remote_path);
         if let Some(ref wrapper) = host.wrapper {
             eprintln!("Wrapper: {}", wrapper);
         }
@@ -76,13 +77,13 @@ pub fn run(
     };
 
     if dry_run {
-        eprintln!("Would run: ssh {} cd \"{}\" && {}", host.hostname, host.path, command);
+        eprintln!("Would run: ssh {} cd \"{}\" && {}", host.hostname, remote_path, command);
         return Ok(0);
     }
 
     let exit_code = ssh::run_remote_command(
         &host.hostname,
-        &host.path,
+        &remote_path,
         command,
         &host.shell,
         host.wrapper.as_deref(),
@@ -116,7 +117,7 @@ pub fn run(
 
                     let rc_exit = ssh::run_remote_command(
                         &host.hostname,
-                        &host.path,
+                        &remote_path,
                         reconnect_cmd,
                         &host.shell,
                         host.wrapper.as_deref(),

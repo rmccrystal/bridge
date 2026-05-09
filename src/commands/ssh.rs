@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use crate::config::{Config, Shell};
+use crate::config::{self, Config, Shell};
 use crate::env_loader;
 use crate::ssh;
 use super::sync;
@@ -15,6 +15,7 @@ pub fn run(host: Option<&str>, do_sync: bool, verbose: bool) -> Result<i32> {
 
     let project_root = Config::project_root(&config_path);
     let env_vars = env_loader::load_env_files(&project_root, &host.env_files)?;
+    let remote_path = config::effective_remote_path(host, &project_root);
 
     let shell_cmd = match host.shell {
         Shell::Bash => "bash",
@@ -24,13 +25,13 @@ pub fn run(host: Option<&str>, do_sync: bool, verbose: bool) -> Result<i32> {
 
     if verbose {
         eprintln!("Opening SSH session on host: {} ({})", host_name, host.hostname);
-        eprintln!("Remote path: {}", host.path);
+        eprintln!("Remote path: {}", remote_path);
         eprintln!("Shell: {}", shell_cmd);
     }
 
     let exit_code = ssh::run_remote_command(
         &host.hostname,
-        &host.path,
+        &remote_path,
         shell_cmd,
         &host.shell,
         host.wrapper.as_deref(),

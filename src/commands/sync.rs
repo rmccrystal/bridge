@@ -8,6 +8,7 @@ pub fn run(host: Option<&str>, no_auto_exclude: bool, delete_excluded: bool, dry
     let project_root = Config::project_root(&config_path);
 
     let (host_name, host) = config.get_host(host)?;
+    let remote_path = config::effective_remote_path(host, &project_root);
 
     // Merge auto-excludes with config excludes (unless --no-auto-exclude)
     let excludes = if no_auto_exclude {
@@ -21,14 +22,14 @@ pub fn run(host: Option<&str>, no_auto_exclude: bool, delete_excluded: bool, dry
     if verbose {
         eprintln!("Project root: {}", project_root.display());
         eprintln!("Syncing to host: {} ({})", host_name, host.hostname);
-        eprintln!("Remote path: {}", host.path);
+        eprintln!("Remote path: {}", remote_path);
         eprintln!("Sync method: {:?}", host.sync_method);
         eprintln!("Excludes: {:?}", excludes);
     }
 
     // Ensure remote directory exists (skip in dry-run, rsync creates it automatically)
     if !dry_run && host.sync_method == SyncMethod::Tar {
-        ssh::ensure_remote_dir(&host.hostname, &host.path, &host.shell, verbose)?;
+        ssh::ensure_remote_dir(&host.hostname, &remote_path, &host.shell, verbose)?;
     }
 
     let source = project_root.to_str().context("Invalid project path")?;
@@ -38,7 +39,7 @@ pub fn run(host: Option<&str>, no_auto_exclude: bool, delete_excluded: bool, dry
             ssh::sync_to_remote(
                 source,
                 &host.hostname,
-                &host.path,
+                &remote_path,
                 &excludes,
                 &host.shell,
                 dry_run,
@@ -49,7 +50,7 @@ pub fn run(host: Option<&str>, no_auto_exclude: bool, delete_excluded: bool, dry
             ssh::rsync_to_remote(
                 source,
                 &host.hostname,
-                &host.path,
+                &remote_path,
                 &excludes,
                 &host.shell,
                 delete_excluded,

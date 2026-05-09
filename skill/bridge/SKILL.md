@@ -43,6 +43,7 @@ default_host = "dev-server"
 hostname = "dev-server"          # SSH alias or IP address
 path = "/home/user/project"      # Remote working directory
 shell = "bash"                   # bash (default), powershell, or cmd
+worktree_rename = true           # Linked git worktrees use path-worktree_name
 wrapper = "source ~/.profile && {}"  # Optional: wrap all commands
 
 [hosts.windows-pc]
@@ -65,6 +66,7 @@ exclude = [".git", "target", "node_modules", "__pycache__"]
 | `hosts.<name>.path` | Yes | Remote working directory |
 | `hosts.<name>.shell` | No | `bash` (default), `powershell`, or `cmd` |
 | `hosts.<name>.sync_method` | No | `tar` (default) or `rsync` (incremental) |
+| `hosts.<name>.worktree_rename` | No | Linked Git worktrees use `path-<worktree-directory-name>` (default: true) |
 | `hosts.<name>.wrapper` | No | Command wrapper template with `{}` placeholder |
 | `hosts.<name>.strict_env` | No | Fail on missing `${VAR}` (default: true) |
 | `hosts.<name>.env_files` | No | Additional env files to load after `.env` |
@@ -82,6 +84,18 @@ exclude = [".git", "target", "node_modules", "__pycache__"]
 **Auto-excludes**: Mac-specific files (`.DS_Store`, `._*`) are automatically excluded. Use `--no-auto-exclude` to disable.
 
 **Note**: With rsync, excluded files on remote are preserved by default. Use `--delete-excluded` to remove them.
+
+### Git Worktree Remote Paths
+
+By default, linked Git worktrees deploy to a remote path suffixed with the local worktree directory name. The primary checkout keeps the configured `path`.
+
+```toml
+[hosts.dev-server]
+path = "/home/user/project"
+worktree_rename = true
+```
+
+If the local checkout is a linked worktree at `~/code/project-codex-1`, Bridge uses `/home/user/project-project-codex-1` for `sync`, `run`, `ssh`, `upload`, and relative `download` paths. Set `worktree_rename = false` to always use the configured path exactly.
 
 ### Command Wrapper
 
